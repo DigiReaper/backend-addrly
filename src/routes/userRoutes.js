@@ -49,6 +49,18 @@ router.post(
   asyncHandler(userController.createProfile)
 );
 
+// Onboarding endpoint
+router.post(
+  '/onboarding',
+  asyncHandler(userController.completeOnboarding)
+);
+
+// Find matches endpoint
+router.get(
+  '/matches',
+  asyncHandler(userController.findMatches)
+);
+
 // Matching endpoints
 router.post(
   '/find-matches',

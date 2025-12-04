@@ -136,6 +136,10 @@ app.use('/api/docs', dateMeDocRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/users', userRoutes);
 
+// Import and use form routes
+import formRoutes from './routes/formRoutes.js';
+app.use('/api/forms', formRoutes);
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({

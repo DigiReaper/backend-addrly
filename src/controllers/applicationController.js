@@ -435,6 +435,305 @@ class ApplicationController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  /**
+   * Get all applications for user's forms
+   */
+  async getAllApplications(req, res) {
+    try {
+      const userId = req.user.id;
+
+      // Get all applications for forms owned by this user
+      const { data: applications, error } = await supabaseAdmin
+        .from('form_applications')
+        .select(`
+          *,
+          form:dating_forms!inner(id, title, user_id),
+          applicant:profiles(full_name, email, age, location, bio)
+        `)
+        .eq('form.user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Format the response
+      const formattedApplications = applications.map(app => ({
+        id: app.id,
+        applicant_name: app.applicant?.full_name || 'Unknown',
+        applicant_email: app.applicant?.email || '',
+        form_name: app.form?.title || 'Untitled Form',
+        applied_on: app.created_at,
+        status: app.status || 'new',
+        based_in: app.applicant?.location || '',
+        responses: app.responses
+      }));
+
+      res.json({
+        success: true,
+        applications: formattedApplications
+      });
+    } catch (error) {
+      console.error('Get applications error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch applications',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get a single application
+   */
+  async getApplication(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      const { data: application, error } = await supabaseAdmin
+        .from('form_applications')
+        .select(`
+          *,
+          form:dating_forms!inner(id, title, user_id, fields),
+          applicant:profiles(*)
+        `)
+        .eq('id', id)
+        .eq('form.user_id', userId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return res.status(404).json({
+            success: false,
+            message: 'Application not found'
+          });
+        }
+        throw error;
+      }
+
+      // Parse fields if stored as JSON string
+      if (typeof application.form.fields === 'string') {
+        application.form.fields = JSON.parse(application.form.fields);
+      }
+
+      res.json({
+        success: true,
+        application
+      });
+    } catch (error) {
+      console.error('Get application error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch application',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Update application status
+   */
+  async updateStatus(req, res) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const userId = req.user.id;
+
+      if (!['new', 'shortlisted', 'archived'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid status'
+        });
+      }
+
+      // Verify application belongs to user's form
+      const { data: application } = await supabaseAdmin
+        .from('form_applications')
+        .select(`
+          id,
+          form:dating_forms!inner(user_id)
+        `)
+        .eq('id', id)
+        .eq('form.user_id', userId)
+        .single();
+
+      if (!application) {
+        return res.status(404).json({
+          success: false,
+          message: 'Application not found'
+        });
+      }
+
+      // Update status
+      const { data: updated, error } = await supabaseAdmin
+        .from('form_applications')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      res.json({
+        success: true,
+        message: 'Status updated successfully',
+        application: updated
+      });
+    } catch (error) {
+      console.error('Update status error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update status',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * AI-powered top candidate selection
+   */
+  async aiSelectTopCandidates(req, res) {
+    try {
+      const userId = req.user.id;
+      const { limit = 3 } = req.body;
+
+      // Get user's profile for matching
+      const { data: userProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (!userProfile) {
+        return res.status(404).json({
+          success: false,
+          message: 'User profile not found'
+        });
+      }
+
+      // Get all applications for user's forms
+      const { data: applications, error } = await supabaseAdmin
+        .from('form_applications')
+        .select(`
+          *,
+          form:dating_forms!inner(user_id),
+          applicant:profiles(*)
+        `)
+        .eq('form.user_id', userId)
+        .eq('status', 'new');
+
+      if (error) throw error;
+
+      if (!applications || applications.length === 0) {
+        return res.json({
+          success: true,
+          topCandidates: [],
+          message: 'No new applications to analyze'
+        });
+      }
+
+      // AI Scoring Algorithm
+      const scoredApplications = applications.map(app => {
+        const applicant = app.applicant;
+        let score = 0;
+        const factors = [];
+
+        // 1. Interest Matching (40%)
+        if (userProfile.interests && applicant.interests) {
+          const userInterests = new Set(userProfile.interests);
+          const applicantInterests = applicant.interests;
+          const commonInterests = applicantInterests.filter(i => userInterests.has(i));
+          const interestScore = (commonInterests.length / Math.max(userInterests.size, applicantInterests.length)) * 40;
+          score += interestScore;
+          factors.push({ name: 'Interests', score: interestScore, common: commonInterests });
+        }
+
+        // 2. Value Alignment (30%)
+        if (userProfile.core_values && applicant.core_values) {
+          const userValues = new Set(userProfile.core_values);
+          const applicantValues = applicant.core_values;
+          const commonValues = applicantValues.filter(v => userValues.has(v));
+          const valueScore = (commonValues.length / Math.max(userValues.size, applicantValues.length)) * 30;
+          score += valueScore;
+          factors.push({ name: 'Values', score: valueScore, common: commonValues });
+        }
+
+        // 3. Location Proximity (15%)
+        if (userProfile.location && applicant.location) {
+          const sameLocation = userProfile.location.toLowerCase() === applicant.location.toLowerCase();
+          const locationScore = sameLocation ? 15 : 5;
+          score += locationScore;
+          factors.push({ name: 'Location', score: locationScore, same: sameLocation });
+        }
+
+        // 4. Lifestyle Compatibility (15%)
+        if (userProfile.lifestyle_preferences && applicant.lifestyle_preferences) {
+          let lifestyleScore = 0;
+          const userLifestyle = userProfile.lifestyle_preferences;
+          const applicantLifestyle = applicant.lifestyle_preferences;
+
+          if (userLifestyle.exercise_frequency === applicantLifestyle.exercise_frequency) lifestyleScore += 5;
+          if (userLifestyle.drinking === applicantLifestyle.drinking) lifestyleScore += 5;
+          if (userLifestyle.smoking === applicantLifestyle.smoking) lifestyleScore += 5;
+
+          score += lifestyleScore;
+          factors.push({ name: 'Lifestyle', score: lifestyleScore });
+        }
+
+        // 5. Age Compatibility Bonus (10%)
+        if (userProfile.preferred_age_range && applicant.age) {
+          const { min, max } = userProfile.preferred_age_range;
+          if (applicant.age >= min && applicant.age <= max) {
+            score += 10;
+            factors.push({ name: 'Age Match', score: 10 });
+          }
+        }
+
+        // 6. Bio completeness bonus (5%)
+        if (applicant.bio && applicant.bio.length > 150) {
+          score += 5;
+          factors.push({ name: 'Profile Quality', score: 5 });
+        }
+
+        return {
+          ...app,
+          ai_score: Math.round(score),
+          match_factors: factors,
+          applicant_name: applicant.full_name,
+          applicant_email: applicant.email
+        };
+      });
+
+      // Sort by score and get top candidates
+      const topCandidates = scoredApplications
+        .sort((a, b) => b.ai_score - a.ai_score)
+        .slice(0, limit)
+        .map(app => ({
+          id: app.id,
+          applicant_name: app.applicant_name,
+          applicant_email: app.applicant_email,
+          form_name: app.form?.title || 'Untitled Form',
+          applied_on: app.created_at,
+          status: app.status,
+          ai_score: app.ai_score,
+          match_factors: app.match_factors,
+          based_in: app.applicant?.location
+        }));
+
+      res.json({
+        success: true,
+        topCandidates,
+        message: `Selected top ${topCandidates.length} candidates based on compatibility`
+      });
+    } catch (error) {
+      console.error('AI selection error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to run AI selection',
+        error: error.message
+      });
+    }
+  }
 }
 
 export default new ApplicationController();

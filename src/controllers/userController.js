@@ -666,6 +666,281 @@ class UserController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  /**
+   * Complete onboarding with full profile data
+   */
+  async completeOnboarding(req, res) {
+    try {
+      const userId = req.user?.id || req.body.auth_user_id;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User authentication required'
+        });
+      }
+
+      const {
+        full_name,
+        age,
+        gender,
+        location,
+        bio,
+        interests,
+        looking_for,
+        relationship_type,
+        personality_type,
+        hobbies,
+        lifestyle,
+        education,
+        occupation,
+        social_media_urls,
+        preferred_age_range,
+        deal_breakers,
+        values
+      } = req.body;
+
+      // Validation
+      if (!full_name || !age || !gender || !location || !bio || !interests || !looking_for || !relationship_type) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields'
+        });
+      }
+
+      if (age < 18 || age > 100) {
+        return res.status(400).json({
+          success: false,
+          error: 'Age must be between 18 and 100'
+        });
+      }
+
+      if (bio.length < 50) {
+        return res.status(400).json({
+          success: false,
+          error: 'Bio must be at least 50 characters'
+        });
+      }
+
+      // Check if profile already exists
+      const { data: existingProfile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('*')
+        .eq('auth_user_id', userId)
+        .maybeSingle();
+
+      const profileData = {
+        auth_user_id: userId,
+        email: req.user?.email || req.body.email,
+        name: full_name,
+        age,
+        gender,
+        location,
+        bio,
+        interests,
+        looking_for,
+        relationship_type,
+        personality_type,
+        hobbies,
+        lifestyle,
+        education,
+        occupation,
+        social_media_urls,
+        preferred_age_range,
+        deal_breakers,
+        values,
+        profile_completed: true,
+        updated_at: new Date().toISOString()
+      };
+
+      let profile;
+      if (existingProfile) {
+        // Update existing profile
+        const { data, error } = await supabaseAdmin
+          .from('user_profiles')
+          .update(profileData)
+          .eq('auth_user_id', userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        profile = data;
+      } else {
+        // Create new profile
+        profileData.created_at = new Date().toISOString();
+        const { data, error } = await supabaseAdmin
+          .from('user_profiles')
+          .insert([profileData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        profile = data;
+      }
+
+      // Trigger AI personality analysis if social media URLs provided
+      if (social_media_urls && Object.values(social_media_urls).some(url => url)) {
+        // Run analysis asynchronously
+        this.analyzeUserFootprint(userId, { bio, interests, hobbies, social_media_urls })
+          .catch(err => console.error('AI analysis error:', err));
+      }
+
+      res.json({
+        success: true,
+        message: 'Onboarding completed successfully',
+        profile
+      });
+    } catch (error) {
+      console.error('Onboarding error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to complete onboarding'
+      });
+    }
+  }
+
+  /**
+   * Find matches for authenticated user
+   */
+  async findMatches(req, res) {
+    try {
+      const userId = req.user?.id || req.query.user_id;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User authentication required'
+        });
+      }
+
+      const limit = parseInt(req.query.limit) || 10;
+
+      // Get user profile
+      const { data: userProfile, error: profileError } = await supabaseAdmin
+        .from('user_profiles')
+        .select('*')
+        .eq('auth_user_id', userId)
+        .single();
+
+      if (profileError || !userProfile) {
+        return res.status(404).json({
+          success: false,
+          error: 'Profile not found'
+        });
+      }
+
+      // Build match query based on preferences
+      let query = supabaseAdmin
+        .from('user_profiles')
+        .select('*')
+        .neq('auth_user_id', userId)
+        .eq('profile_completed', true);
+
+      // Filter by looking_for
+      if (userProfile.gender) {
+        query = query.or(`looking_for.cs.{${userProfile.gender}}`);
+      }
+
+      // Filter by age range
+      if (userProfile.preferred_age_range) {
+        query = query
+          .gte('age', userProfile.preferred_age_range.min)
+          .lte('age', userProfile.preferred_age_range.max);
+      }
+
+      // Get potential matches
+      const { data: potentialMatches, error } = await query.limit(limit * 3);
+
+      if (error) throw error;
+
+      // Calculate match scores
+      const matches = (potentialMatches || []).map(match => {
+        let score = 0;
+        
+        // Interest matching (40%)
+        const commonInterests = (userProfile.interests || []).filter(i => 
+          (match.interests || []).includes(i)
+        ).length;
+        score += (commonInterests / Math.max((userProfile.interests || []).length, 1)) * 40;
+
+        // Value matching (30%)
+        const commonValues = (userProfile.values || []).filter(v => 
+          (match.values || []).includes(v)
+        ).length;
+        score += (commonValues / Math.max((userProfile.values || []).length, 1)) * 30;
+
+        // Deal breaker check (-50% if any match)
+        const hasDealBreaker = (userProfile.deal_breakers || []).some(db => {
+          return match.bio?.toLowerCase().includes(db.toLowerCase());
+        });
+        if (hasDealBreaker) score -= 50;
+
+        // Location bonus (15%)
+        if (userProfile.location === match.location) {
+          score += 15;
+        }
+
+        // Lifestyle compatibility (15%)
+        if (userProfile.lifestyle === match.lifestyle) {
+          score += 15;
+        }
+
+        return {
+          ...match,
+          match_score: Math.max(0, Math.min(100, score))
+        };
+      });
+
+      // Sort by match score and return top matches
+      const topMatches = matches
+        .sort((a, b) => b.match_score - a.match_score)
+        .slice(0, limit);
+
+      res.json({
+        success: true,
+        matches: topMatches
+      });
+    } catch (error) {
+      console.error('Find matches error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to find matches'
+      });
+    }
+  }
+
+  /**
+   * Helper function to analyze user's digital footprint
+   */
+  async analyzeUserFootprint(userId, data) {
+    try {
+      const analysisData = {
+        user_id: userId,
+        bio: data.bio,
+        interests: data.interests,
+        hobbies: data.hobbies,
+        social_urls: data.social_media_urls
+      };
+
+      // Use existing psychological analyzer
+      const analysis = await psychologicalAnalyzer.analyzeProfile(analysisData);
+
+      // Store analysis
+      await supabaseAdmin
+        .from('psychological_analyses')
+        .insert({
+          user_id: userId,
+          analysis_data: analysis,
+          created_at: new Date().toISOString()
+        });
+
+      return analysis;
+    } catch (error) {
+      console.error('User footprint analysis error:', error);
+      throw error;
+    }
+  }
 }
 
 export default new UserController();
