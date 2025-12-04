@@ -179,3 +179,38 @@ CREATE TRIGGER update_user_profiles_updated_at BEFORE UPDATE ON user_profiles FO
 CREATE TRIGGER update_date_me_docs_updated_at BEFORE UPDATE ON date_me_docs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_applications_updated_at BEFORE UPDATE ON applications FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_content_analysis_updated_at BEFORE UPDATE ON content_analysis FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Dating Forms Table (for the form builder feature)
+CREATE TABLE IF NOT EXISTS dating_forms (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  fields JSONB DEFAULT '[]'::jsonb,
+  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'inactive')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Form Applications Table
+CREATE TABLE IF NOT EXISTS form_applications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  form_id UUID REFERENCES dating_forms(id) ON DELETE CASCADE,
+  form_owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  applicant_data JSONB DEFAULT '{}'::jsonb,
+  status TEXT DEFAULT 'new' CHECK (status IN ('new', 'shortlisted', 'archived')),
+  ai_score DECIMAL(5,2),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for dating forms
+CREATE INDEX IF NOT EXISTS idx_dating_forms_user_id ON dating_forms(user_id);
+CREATE INDEX IF NOT EXISTS idx_dating_forms_status ON dating_forms(status);
+CREATE INDEX IF NOT EXISTS idx_form_applications_form_id ON form_applications(form_id);
+CREATE INDEX IF NOT EXISTS idx_form_applications_form_owner ON form_applications(form_owner_id);
+CREATE INDEX IF NOT EXISTS idx_form_applications_status ON form_applications(status);
+
+-- Updated at trigger for new tables
+CREATE TRIGGER update_dating_forms_updated_at BEFORE UPDATE ON dating_forms FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_form_applications_updated_at BEFORE UPDATE ON form_applications FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

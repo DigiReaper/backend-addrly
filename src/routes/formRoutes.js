@@ -5,7 +5,11 @@ import { authenticateUser } from '../config/auth.js';
 
 const router = express.Router();
 
-// All routes require authentication
+// Public routes (no auth required)
+router.get('/public/:id', formController.getPublicForm);
+router.post('/public/:id/submit', formController.submitFormApplication);
+
+// All other routes require authentication
 router.use(authenticateUser);
 
 // Form CRUD operations

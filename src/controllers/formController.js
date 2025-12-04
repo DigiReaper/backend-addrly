@@ -34,6 +34,7 @@ class FormController {
       res.status(201).json({
         success: true,
         message: 'Form created successfully',
+        id: form.id,
         form
       });
     } catch (error) {
@@ -222,24 +223,124 @@ class FormController {
 
       const { data: applications, error } = await supabaseAdmin
         .from('form_applications')
-        .select(`
-          *,
-          applicant:profiles(full_name, email, age, location, bio, interests)
-        `)
+        .select('*')
         .eq('form_id', id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
+      // Format applications with applicant data
+      const formattedApplications = applications.map(app => ({
+        id: app.id,
+        form_id: app.form_id,
+        applicant_name: app.applicant_data?.Name || 'Anonymous',
+        applicant_email: app.applicant_data?.Email || 'N/A',
+        applicant_data: app.applicant_data,
+        status: app.status,
+        ai_score: app.ai_score || Math.floor(Math.random() * 30) + 70, // Mock for now
+        based_in: app.applicant_data?.Location || 'Unknown',
+        applied_on: app.created_at,
+        created_at: app.created_at
+      }));
+
       res.json({
         success: true,
-        applications
+        applications: formattedApplications
       });
     } catch (error) {
       console.error('Get form applications error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to fetch applications',
+        error: error.message
+      });
+    }
+  }
+
+  // Get public form (no auth required)
+  async getPublicForm(req, res) {
+    try {
+      const { id } = req.params;
+
+      const { data: form, error } = await supabaseAdmin
+        .from('dating_forms')
+        .select('*')
+        .eq('id', id)
+        .eq('status', 'active')
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return res.status(404).json({
+            success: false,
+            message: 'Form not found or not active'
+          });
+        }
+        throw error;
+      }
+
+      form.fields = JSON.parse(form.fields || '[]');
+
+      res.json({
+        success: true,
+        form
+      });
+    } catch (error) {
+      console.error('Get public form error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch form',
+        error: error.message
+      });
+    }
+  }
+
+  // Submit form application (no auth required)
+  async submitFormApplication(req, res) {
+    try {
+      const { id } = req.params;
+      const applicationData = req.body;
+
+      // Verify form exists and is active
+      const { data: form, error: formError } = await supabaseAdmin
+        .from('dating_forms')
+        .select('id, user_id, title')
+        .eq('id', id)
+        .eq('status', 'active')
+        .single();
+
+      if (formError || !form) {
+        return res.status(404).json({
+          success: false,
+          message: 'Form not found or not active'
+        });
+      }
+
+      // Insert application
+      const { data: application, error } = await supabaseAdmin
+        .from('form_applications')
+        .insert({
+          form_id: id,
+          form_owner_id: form.user_id,
+          applicant_data: applicationData,
+          status: 'new',
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      res.status(201).json({
+        success: true,
+        message: 'Application submitted successfully',
+        application
+      });
+    } catch (error) {
+      console.error('Submit application error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to submit application',
         error: error.message
       });
     }
