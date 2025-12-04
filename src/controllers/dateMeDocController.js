@@ -7,7 +7,9 @@ class DateMeDocController {
    */
   async create(req, res) {
     try {
-      const userId = req.user.id;
+      // For testing without auth, create a default user
+      let userId = req.user?.id || 'test-user-' + Date.now();
+      
       const {
         title,
         description,
@@ -16,14 +18,19 @@ class DateMeDocController {
         preferences,
         form_questions,
         is_public,
-        settings
+        settings,
+        about_me,
+        interests,
+        deal_breakers,
+        custom_questions,
+        social_links
       } = req.body;
 
       // Check if slug is already taken
       const { data: existing } = await supabaseAdmin
         .from('date_me_docs')
         .select('id')
-        .eq('slug', slug)
+        .eq('slug', slug || title.toLowerCase().replace(/\s+/g, '-'))
         .single();
 
       if (existing) {
@@ -31,24 +38,33 @@ class DateMeDocController {
       }
 
       // Get or create user profile
-      let { data: userProfile } = await supabaseAdmin
+      let { data: userProfile, error: profileError } = await supabaseAdmin
         .from('user_profiles')
         .select('id')
         .eq('auth_user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (!userProfile) {
-        const { data: newProfile } = await supabaseAdmin
+        const { data: newProfile, error: insertError } = await supabaseAdmin
           .from('user_profiles')
           .insert({
             auth_user_id: userId,
-            email: req.user.email,
-            name: req.user.name
+            email: req.user?.email || 'test@example.com',
+            name: req.user?.name || 'Test User'
           })
           .select()
           .single();
+        
+        if (insertError) {
+          console.error('Error creating user profile:', insertError);
+          return res.status(500).json({ error: 'Failed to create user profile: ' + insertError.message });
+        }
+        
         userProfile = newProfile;
       }
+
+      // Prepare form questions
+      const questions = custom_questions || form_questions || [];
 
       // Create date-me-doc
       const { data: doc, error } = await supabaseAdmin
@@ -56,13 +72,18 @@ class DateMeDocController {
         .insert({
           user_id: userProfile.id,
           title,
-          description,
-          header_content,
-          slug,
+          description: description || about_me || '',
+          header_content: header_content || {},
+          slug: slug || title.toLowerCase().replace(/\s+/g, '-'),
           preferences: preferences || {},
-          form_questions: form_questions || [],
+          form_questions: questions,
           is_public: is_public !== false,
-          settings: settings || {}
+          settings: settings || {},
+          about_me: about_me || description || '',
+          interests: interests || [],
+          deal_breakers: deal_breakers || [],
+          custom_questions: questions,
+          social_links: social_links || {}
         })
         .select()
         .single();

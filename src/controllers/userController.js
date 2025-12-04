@@ -8,6 +8,11 @@ class UserController {
    */
   async getProfile(req, res) {
     try {
+      // For testing without auth
+      if (!req.user) {
+        return res.json({ profile: null, message: 'No user authenticated' });
+      }
+
       const userId = req.user.id;
 
       const { data: profile, error } = await supabaseAdmin
@@ -80,10 +85,124 @@ class UserController {
   }
 
   /**
+   * Extract content from a URL
+   */
+  async extractContent(req, res) {
+    try {
+      const { url, type } = req.body;
+
+      if (!url) {
+        return res.status(400).json({ error: 'URL is required' });
+      }
+
+      const result = await contentExtractor.extractFromUrl(url, type);
+
+      if (!result.success) {
+        return res.status(400).json({ 
+          error: 'Content extraction failed',
+          details: result.error 
+        });
+      }
+
+      res.json({
+        success: true,
+        content: result.data
+      });
+    } catch (error) {
+      console.error('Extract content error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Analyze a psychological profile using AI
+   */
+  async analyzeProfile(req, res) {
+    try {
+      const { profile } = req.body;
+
+      if (!profile) {
+        return res.status(400).json({ error: 'Profile data is required' });
+      }
+
+      // Create corpus from profile data
+      const corpus = {
+        bio: profile.bio || '',
+        interests: profile.interests || [],
+        texts: profile.content?.texts || []
+      };
+
+      const metadata = {
+        totalLength: JSON.stringify(corpus).length,
+        successfulExtractions: 1
+      };
+
+      const result = await psychologicalAnalyzer.analyzePsychologicalProfile(
+        corpus,
+        metadata
+      );
+
+      if (!result.success) {
+        return res.status(500).json({
+          error: 'Analysis failed',
+          details: result.error
+        });
+      }
+
+      res.json({
+        success: true,
+        analysis: result.profile
+      });
+    } catch (error) {
+      console.error('Analyze profile error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Calculate compatibility between two profiles
+   */
+  async calculateCompatibility(req, res) {
+    try {
+      const { profile1, profile2, preferences } = req.body;
+
+      if (!profile1 || !profile2) {
+        return res.status(400).json({ error: 'Two profiles are required' });
+      }
+
+      const result = await psychologicalAnalyzer.calculateCompatibility(
+        profile1,
+        profile2,
+        preferences || {}
+      );
+
+      if (!result.success) {
+        return res.status(500).json({
+          error: 'Compatibility calculation failed',
+          details: result.error
+        });
+      }
+
+      res.json({
+        success: true,
+        compatibility: result.compatibility
+      });
+    } catch (error) {
+      console.error('Calculate compatibility error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
    * Analyze user's digital footprint
    */
   async analyzeFootprint(req, res) {
     try {
+      // For testing without auth
+      if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
       const userId = req.user.id;
 
       const { data: profile } = await supabaseAdmin
@@ -190,6 +309,11 @@ class UserController {
    */
   async getAnalysis(req, res) {
     try {
+      // For testing without auth
+      if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
       const userId = req.user.id;
 
       const { data: profile } = await supabaseAdmin

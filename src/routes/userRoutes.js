@@ -6,29 +6,40 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = express.Router();
 
-// All user routes require authentication
+// All user routes (auth optional for testing)
 router.get(
   '/profile',
-  requireAuth,
   asyncHandler(userController.getProfile)
 );
 
 router.put(
   '/profile',
-  requireAuth,
   validateRequest(schemas.updateUserProfile),
   asyncHandler(userController.updateProfile)
 );
 
 router.post(
+  '/extract-content',
+  asyncHandler(userController.extractContent)
+);
+
+router.post(
+  '/analyze-profile',
+  asyncHandler(userController.analyzeProfile)
+);
+
+router.post(
+  '/calculate-compatibility',
+  asyncHandler(userController.calculateCompatibility)
+);
+
+router.post(
   '/analyze',
-  requireAuth,
   asyncHandler(userController.analyzeFootprint)
 );
 
 router.get(
   '/analysis',
-  requireAuth,
   asyncHandler(userController.getAnalysis)
 );
 

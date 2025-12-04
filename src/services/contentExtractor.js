@@ -1,13 +1,9 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { TwitterApi } from 'twitter-api-v2';
 
 class ContentExtractor {
   constructor() {
-    // Initialize Twitter client
-    if (process.env.TWITTER_BEARER_TOKEN) {
-      this.twitterClient = new TwitterApi(process.env.TWITTER_BEARER_TOKEN);
-    }
+    // Removed Twitter API dependency - using web scraping only
   }
 
   /**
@@ -96,71 +92,18 @@ class ContentExtractor {
   }
 
   /**
-   * Extract content from Twitter profile
-   */
-  async extractFromTwitter(handle) {
-    try {
-      if (!this.twitterClient) {
-        throw new Error('Twitter API not configured');
-      }
-
-      // Remove @ if present
-      handle = handle.replace('@', '');
-
-      // Get user info
-      const user = await this.twitterClient.v2.userByUsername(handle, {
-        'user.fields': ['description', 'created_at', 'public_metrics', 'verified']
-      });
-
-      if (!user.data) {
-        throw new Error('Twitter user not found');
-      }
-
-      // Get recent tweets
-      const tweets = await this.twitterClient.v2.userTimeline(user.data.id, {
-        max_results: 100,
-        'tweet.fields': ['created_at', 'public_metrics', 'entities'],
-        exclude: ['retweets']
-      });
-
-      const tweetTexts = tweets.data?.data?.map(t => t.text) || [];
-
-      return {
-        success: true,
-        data: {
-          handle,
-          userId: user.data.id,
-          name: user.data.name,
-          username: user.data.username,
-          bio: user.data.description,
-          verified: user.data.verified,
-          metrics: user.data.public_metrics,
-          tweets: tweetTexts,
-          tweetCount: tweetTexts.length,
-          extractedAt: new Date().toISOString()
-        }
-      };
-    } catch (error) {
-      console.error('Twitter extraction error:', error.message);
-      return {
-        success: false,
-        error: error.message,
-        handle
-      };
-    }
-  }
-
-  /**
    * Extract content based on URL type
    */
   async extractFromUrl(url, type = 'website') {
     try {
-      // Detect type from URL if not provided
+      // For Twitter/X, inform that web scraping is used (no API)
       if (url.includes('twitter.com') || url.includes('x.com')) {
-        const match = url.match(/(?:twitter\.com|x\.com)\/([^/?]+)/);
-        if (match) {
-          return await this.extractFromTwitter(match[1]);
-        }
+        return {
+          success: false,
+          error: 'Twitter/X content extraction via API has been removed. Please provide alternative content sources.',
+          url,
+          type: 'twitter'
+        };
       }
 
       // For Instagram, we can't easily extract without API access

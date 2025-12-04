@@ -2,7 +2,7 @@
 
 ## Overview
 
-DateMeDoc is a comprehensive dating application backend that uses AI-powered psychological analysis and matchmaking. Users create "Date-Me-Docs" - personalized dating profiles with custom application forms. When people apply, the system analyzes their digital footprint (Twitter, blogs, personal websites) to determine compatibility.
+DateMeDoc is a comprehensive dating application backend that uses AI-powered psychological analysis and matchmaking. Users create "Date-Me-Docs" - personalized dating profiles with custom application forms. When people apply, the system analyzes their digital footprint (blogs, personal websites) to determine compatibility.
 
 ## Tech Stack
 
@@ -10,8 +10,8 @@ DateMeDoc is a comprehensive dating application backend that uses AI-powered psy
 - **Framework**: Express.js
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Better Auth (Google OAuth)
-- **AI/ML**: OpenAI GPT-4 for psychological analysis
-- **Content Extraction**: Cheerio, Twitter API v2
+- **AI/ML**: Google Gemini AI for psychological analysis
+- **Content Extraction**: Cheerio (web scraping)
 - **Queue**: BullMQ (Redis-based)
 
 ## Features
@@ -31,12 +31,12 @@ DateMeDoc is a comprehensive dating application backend that uses AI-powered psy
 
 3. **Application System**
    - Submit applications with custom answers
-   - Include social media links (Twitter, Instagram, personal websites, blogs)
+   - Include social media links (personal websites, blogs)
    - Automatic content extraction from submitted links
    - Asynchronous processing with job queue
 
-4. **AI-Powered Analysis**
-   - **Content Extraction**: Scrapes and extracts text from websites, blogs, Twitter
+4. **AI-Powered Analysis** (Google Gemini)
+   - **Content Extraction**: Scrapes and extracts text from websites and blogs
    - **Psychological Profiling**: Analyzes personality traits (Big Five), communication style, values, interests
    - **Compatibility Matching**: Calculates compatibility scores based on psychological profiles
    - **Application Matching**: Evaluates how well application answers match doc owner's preferences

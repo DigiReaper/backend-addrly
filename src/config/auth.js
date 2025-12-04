@@ -1,43 +1,66 @@
-import { betterAuth } from 'better-auth';
-import { supabaseAdapter } from 'better-auth/adapters/supabase';
-import { createClient } from '@supabase/supabase-js';
+import supabaseAdmin from '../db/supabase.js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Simple authentication middleware using Supabase Auth
+export const authenticateUser = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-export const auth = betterAuth({
-  database: supabaseAdapter(supabase),
-  emailAndPassword: {
-    enabled: false // We're using only Google OAuth
-  },
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      redirectURI: `${process.env.BETTER_AUTH_URL}/api/auth/callback/google`
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authorization header missing or invalid'
+      });
     }
-  },
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // 1 day
-    cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60 // 5 minutes
-    }
-  },
-  advanced: {
-    cookiePrefix: 'datemедoc',
-    useSecureCookies: process.env.NODE_ENV === 'production',
-    crossSubDomainCookies: {
-      enabled: false
-    }
-  },
-  trustedOrigins: [
-    process.env.FRONTEND_URL,
-    process.env.BASE_URL
-  ]
-});
 
-export default auth;
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    // Verify the JWT token with Supabase
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token'
+      });
+    }
+
+    // Attach user to request object
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication failed'
+    });
+  }
+};
+
+// Optional: Middleware to get user profile
+export const getUserProfile = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return next();
+    }
+
+    const { data: profile, error } = await supabaseAdmin
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (!error && profile) {
+      req.userProfile = profile;
+    }
+
+    next();
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    next();
+  }
+};
+
+export default {
+  authenticateUser,
+  getUserProfile
+};

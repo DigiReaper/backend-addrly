@@ -1,11 +1,11 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 class PsychologicalAnalyzer {
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
+    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    this.model = this.genAI.getGenerativeModel({ 
+      model: process.env.GEMINI_MODEL || 'gemini-pro'
     });
-    this.model = process.env.OPENAI_MODEL || 'gpt-4-turbo-preview';
   }
 
   /**
@@ -20,86 +20,63 @@ ${content.substring(0, 15000)}
 
 ${metadata.sources ? `\nSources: ${metadata.sources.map(s => `${s.type}: ${s.url}`).join(', ')}` : ''}
 
-Provide a detailed analysis in the following JSON format:
+Provide a detailed analysis in the following JSON format (return ONLY valid JSON, no markdown):
 {
   "personality_traits": {
-    "openness": <0-1 score>,
-    "conscientiousness": <0-1 score>,
-    "extraversion": <0-1 score>,
-    "agreeableness": <0-1 score>,
-    "neuroticism": <0-1 score>
+    "openness": 0.8,
+    "conscientiousness": 0.7,
+    "extraversion": 0.6,
+    "agreeableness": 0.75,
+    "neuroticism": 0.3
   },
   "communication_style": {
-    "primary_style": "<analytical|emotional|casual|formal|humorous>",
-    "tone": "<enthusiastic|reserved|balanced|passionate>",
-    "vocabulary_level": "<simple|moderate|sophisticated>",
-    "authenticity_score": <0-1>
+    "primary_style": "analytical",
+    "tone": "enthusiastic",
+    "vocabulary_level": "sophisticated",
+    "authenticity_score": 0.85
   },
-  "interests": [
-    "<list of interests extracted from content>"
-  ],
-  "passions": [
-    "<deep passions and things they care about>"
-  ],
-  "values": [
-    "<core values like freedom, family, career, creativity, etc>"
-  ],
-  "thinking_style": "<analytical|creative|practical|philosophical>",
-  "humor_type": "<sarcastic|witty|dark|wholesome|dry|none>",
+  "interests": ["tech", "reading", "travel"],
+  "passions": ["building products", "learning"],
+  "values": ["freedom", "creativity", "growth"],
+  "thinking_style": "analytical",
+  "humor_type": "witty",
   "emotional_intelligence": {
-    "self_awareness": <0-1 score>,
-    "empathy": <0-1 score>,
-    "emotional_expression": <0-1 score>
+    "self_awareness": 0.8,
+    "empathy": 0.75,
+    "emotional_expression": 0.7
   },
-  "social_orientation": "<introverted|extroverted|ambiverted>",
+  "social_orientation": "ambiverted",
   "lifestyle_indicators": {
-    "activity_level": "<sedentary|moderate|active>",
-    "cultural_engagement": "<low|moderate|high>",
-    "intellectual_curiosity": "<low|moderate|high>",
-    "spontaneity": "<planned|balanced|spontaneous>"
+    "activity_level": "active",
+    "cultural_engagement": "high",
+    "intellectual_curiosity": "high",
+    "spontaneity": "balanced"
   },
   "relationship_indicators": {
-    "attachment_style": "<secure|anxious|avoidant|mixed>",
-    "commitment_readiness": "<low|moderate|high>",
-    "emotional_availability": "<low|moderate|high>"
+    "attachment_style": "secure",
+    "commitment_readiness": "high",
+    "emotional_availability": "high"
   },
-  "red_flags": [
-    "<any concerning patterns or behaviors>"
-  ],
-  "green_flags": [
-    "<positive indicators for relationships>"
-  ],
-  "conversation_topics": [
-    "<topics they would enjoy discussing>"
-  ],
-  "life_stage": "<student|early_career|established|seeking_change>",
-  "overall_summary": "<2-3 sentence summary of the person>"
+  "red_flags": [],
+  "green_flags": ["authentic communication", "growth mindset"],
+  "conversation_topics": ["technology", "philosophy", "startups"],
+  "life_stage": "early_career",
+  "overall_summary": "A thoughtful individual with strong analytical skills and genuine curiosity about the world."
 }
 
-Be thorough, nuanced, and base your analysis on concrete evidence from the text. Assign realistic scores between 0 and 1.`;
+Be thorough, nuanced, and base your analysis on concrete evidence from the text. Assign realistic scores between 0 and 1. Return ONLY the JSON object, no other text.`;
 
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert psychologist specializing in personality analysis and compatibility assessment. Provide detailed, evidence-based insights in valid JSON format only.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3,
-        response_format: { type: 'json_object' }
-      });
-
-      const analysis = JSON.parse(response.choices[0].message.content);
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      // Clean up markdown formatting if present
+      const jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const analysis = JSON.parse(jsonText);
       
       return {
         success: true,
         profile: analysis,
-        tokensUsed: response.usage.total_tokens,
         analyzedAt: new Date().toISOString()
       };
     } catch (error) {
@@ -126,87 +103,63 @@ ${JSON.stringify(profile2, null, 2)}
 
 ${preferences && Object.keys(preferences).length > 0 ? `\nPerson 1's stated preferences:\n${JSON.stringify(preferences, null, 2)}` : ''}
 
-Provide a comprehensive compatibility analysis in the following JSON format:
+Provide a comprehensive compatibility analysis in JSON format (return ONLY valid JSON, no markdown):
 {
-  "overall_compatibility_score": <0-100>,
-  "confidence_level": <0-1>,
+  "overall_compatibility_score": 85,
+  "confidence_level": 0.8,
   "compatibility_breakdown": {
-    "personality_match": <0-100>,
-    "interests_overlap": <0-100>,
-    "values_alignment": <0-100>,
-    "communication_compatibility": <0-100>,
-    "lifestyle_compatibility": <0-100>,
-    "intellectual_compatibility": <0-100>,
-    "emotional_compatibility": <0-100>,
-    "humor_compatibility": <0-100>
+    "personality_match": 80,
+    "interests_overlap": 90,
+    "values_alignment": 85,
+    "communication_compatibility": 88,
+    "lifestyle_compatibility": 75,
+    "intellectual_compatibility": 87,
+    "emotional_compatibility": 82,
+    "humor_compatibility": 78
   },
   "matching_factors": {
-    "shared_interests": ["<list>"],
-    "complementary_traits": ["<list>"],
-    "similar_values": ["<list>"],
-    "compatible_communication": "<explanation>"
+    "shared_interests": ["tech", "reading"],
+    "complementary_traits": ["analytical and creative"],
+    "similar_values": ["growth", "authenticity"],
+    "compatible_communication": "Both value deep conversations"
   },
   "conversation_potential": {
-    "score": <0-100>,
-    "topics": ["<topics they can bond over>"],
-    "depth_potential": "<shallow|moderate|deep>"
+    "score": 88,
+    "topics": ["technology", "philosophy", "personal growth"],
+    "depth_potential": "deep"
   },
   "relationship_potential": {
-    "friendship": <0-100>,
-    "romantic": <0-100>,
-    "long_term": <0-100>
+    "friendship": 90,
+    "romantic": 85,
+    "long_term": 82
   },
-  "red_flags": [
-    {
-      "flag": "<description>",
-      "severity": "<low|medium|high>",
-      "explanation": "<why this matters>"
-    }
-  ],
+  "red_flags": [],
   "green_flags": [
     {
-      "flag": "<description>",
-      "strength": "<medium|high>",
-      "explanation": "<why this is positive>"
+      "flag": "Strong intellectual compatibility",
+      "strength": "high",
+      "explanation": "Both value learning and deep conversations"
     }
   ],
-  "areas_of_growth": [
-    "<potential challenges they might face>"
-  ],
-  "date_ideas": [
-    "<activities they would both enjoy>"
-  ],
-  "recommendation": "<strong_match|good_potential|moderate_match|poor_match>",
-  "summary": "<3-4 sentence summary of compatibility>",
-  "conversation_starters": [
-    "<topics or questions they could discuss>"
-  ]
+  "areas_of_growth": ["Different activity levels might need balance"],
+  "date_ideas": ["Coffee shop discussion", "Museum visit", "Hiking"],
+  "recommendation": "strong_match",
+  "summary": "Excellent compatibility with strong intellectual and emotional connection.",
+  "conversation_starters": ["Favorite books", "Current projects", "Life philosophy"]
 }
 
-Be honest, nuanced, and evidence-based. Consider both compatibility and complementarity.`;
+Be honest, nuanced, and evidence-based. Return ONLY the JSON object, no other text.`;
 
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert matchmaker and relationship counselor. Provide detailed, honest compatibility assessments in valid JSON format only.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3,
-        response_format: { type: 'json_object' }
-      });
-
-      const compatibility = JSON.parse(response.choices[0].message.content);
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      const jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const compatibility = JSON.parse(jsonText);
       
       return {
         success: true,
         compatibility,
-        tokensUsed: response.usage.total_tokens,
         analyzedAt: new Date().toISOString()
       };
     } catch (error) {
@@ -237,60 +190,44 @@ ${JSON.stringify(applicantProfile, null, 2)}
 Applicant's Answers:
 ${JSON.stringify(applicationAnswers, null, 2)}
 
-Provide analysis in JSON format:
+Provide analysis in JSON format (return ONLY valid JSON, no markdown):
 {
-  "preference_match_score": <0-100>,
-  "answer_quality_score": <0-100>,
-  "authenticity_score": <0-100>,
-  "effort_score": <0-100>,
+  "preference_match_score": 85,
+  "answer_quality_score": 90,
+  "authenticity_score": 88,
+  "effort_score": 92,
   "preference_matches": [
     {
-      "preference": "<preference name>",
-      "matched": <boolean>,
-      "explanation": "<how well they match>"
+      "preference": "interests",
+      "matched": true,
+      "explanation": "Strong overlap in technology and reading"
     }
   ],
   "standout_answers": [
     {
-      "question": "<question>",
-      "answer": "<answer>",
-      "why_standout": "<explanation>"
+      "question": "Tell me about yourself",
+      "answer": "The answer text",
+      "why_standout": "Authentic and thoughtful response"
     }
   ],
-  "concerning_answers": [
-    {
-      "question": "<question>",
-      "answer": "<answer>",
-      "concern": "<explanation>"
-    }
-  ],
-  "overall_impression": "<positive|neutral|negative>",
-  "recommendation": "<highly_recommend|recommend|consider|pass>",
-  "summary": "<brief summary of the application>"
-}`;
+  "concerning_answers": [],
+  "overall_impression": "positive",
+  "recommendation": "highly_recommend",
+  "summary": "Excellent application with thoughtful answers and strong compatibility."
+}
 
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert at evaluating dating applications. Provide honest, detailed assessments in valid JSON format only.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3,
-        response_format: { type: 'json_object' }
-      });
+Return ONLY the JSON object, no other text.`;
 
-      const analysis = JSON.parse(response.choices[0].message.content);
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      const jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const analysis = JSON.parse(jsonText);
       
       return {
         success: true,
         analysis,
-        tokensUsed: response.usage.total_tokens,
         analyzedAt: new Date().toISOString()
       };
     } catch (error) {

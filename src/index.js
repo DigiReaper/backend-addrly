@@ -5,10 +5,9 @@ import morgan from 'morgan';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { toNodeHandler } from 'better-auth/node';
 
 // Import configurations and middleware
-import auth from './config/auth.js';
+import { authenticateUser, getUserProfile } from './config/auth.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 // Import routes
@@ -70,8 +69,67 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Better Auth routes
-app.all('/api/auth/*', toNodeHandler(auth));
+// Better Auth routes - replaced with Supabase Auth
+// app.all('/api/auth/*', toNodeHandler(auth));
+
+// Simple auth endpoints using Supabase
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required'
+      });
+    }
+
+    // This would typically be handled by your frontend using Supabase client
+    // For API-only auth, you might want to use a different approach
+    res.status(501).json({
+      success: false,
+      error: 'Use Supabase client for authentication. This endpoint is for reference only.'
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Login failed'
+    });
+  }
+});
+
+app.post('/api/auth/logout', authenticateUser, async (req, res) => {
+  try {
+    // Client-side logout is typically handled by Supabase client
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Logout failed'
+    });
+  }
+});
+
+app.get('/api/auth/me', authenticateUser, getUserProfile, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      user: req.user,
+      profile: req.userProfile || null
+    });
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user data'
+    });
+  }
+});
 
 // API routes
 app.use('/api/docs', dateMeDocRoutes);
