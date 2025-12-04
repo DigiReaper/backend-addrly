@@ -43,4 +43,21 @@ router.get(
   asyncHandler(userController.getAnalysis)
 );
 
+// Profile creation
+router.post(
+  '/profile',
+  asyncHandler(userController.createProfile)
+);
+
+// Matching endpoints
+router.post(
+  '/find-matches',
+  asyncHandler(userController.findMatches)
+);
+
+router.post(
+  '/match-application',
+  asyncHandler(userController.matchApplication)
+);
+
 export default router;

@@ -10,7 +10,8 @@
     "migrate": "node src/db/migrate.js",
     "test": "node tests/api.test.js",
     "test:ai": "node tests/ai.test.js",
-    "test:all": "npm run test && npm run test:ai"
+    "test:matching": "node tests/matching.test.js",
+    "test:all": "npm run test && npm run test:ai && npm run test:matching"
   },
   "keywords": [
     "dating",

@@ -21,4 +21,10 @@ router.get(
   asyncHandler(applicationController.getStatus)
 );
 
+// Analyze application match
+router.post(
+  '/analyze-match',
+  asyncHandler(applicationController.analyzeMatch)
+);
+
 export default router;

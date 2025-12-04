@@ -31,6 +31,7 @@ const log = {
 
 // Test data
 let testUser = null;
+let testDocSlug = null;
 let testDocId = null;
 let testApplicationId = null;
 
@@ -62,11 +63,13 @@ async function testCreateDateMeDoc() {
       deal_breakers: ['smoking', 'dishonesty'],
       custom_questions: [
         {
+          id: 'q1',
           question: 'What is your favorite book?',
-          required: true,
+          required: false,
           type: 'text'
         },
         {
+          id: 'q2',
           question: 'Tell me about your dream vacation',
           required: false,
           type: 'textarea'
@@ -87,7 +90,9 @@ async function testCreateDateMeDoc() {
     
     if (response.status === 201 && response.data.doc) {
       testDocId = response.data.doc.id;
+      testDocSlug = response.data.doc.slug;
       log.success(`Date-Me-Doc created with ID: ${testDocId}`);
+      log.info(`  Slug: ${testDocSlug}`);
       log.info(`  Title: ${response.data.doc.title}`);
       log.info(`  Interests: ${response.data.doc.interests.length} items`);
       log.info(`  Questions: ${response.data.doc.custom_questions.length} items`);
@@ -108,17 +113,17 @@ async function testCreateDateMeDoc() {
 async function testGetDateMeDoc() {
   log.info('\n=== Testing Get Date-Me-Doc ===');
   try {
-    if (!testDocId) {
-      log.warn('No test doc ID available, skipping test');
+    if (!testDocSlug) {
+      log.warn('No test doc slug available, skipping test');
       return false;
     }
 
-    const response = await api.get(`/api/docs/${testDocId}`);
+    const response = await api.get(`/api/docs/${testDocSlug}`);
     
     if (response.status === 200 && response.data.doc) {
       log.success('Date-Me-Doc retrieved successfully');
       log.info(`  Title: ${response.data.doc.title}`);
-      log.info(`  Visibility: ${response.data.doc.visibility}`);
+      log.info(`  Description: ${response.data.doc.description}`);
       return true;
     }
     
@@ -164,26 +169,28 @@ async function testUpdateDateMeDoc() {
 async function testSubmitApplication() {
   log.info('\n=== Testing Submit Application ===');
   try {
-    if (!testDocId) {
-      log.warn('No test doc ID available, skipping test');
+    if (!testDocSlug) {
+      log.warn('No test doc slug available, skipping test');
       return false;
     }
 
     const applicationData = {
-      date_me_doc_id: testDocId,
       applicant_name: 'Test Applicant',
       applicant_email: 'test@example.com',
-      applicant_bio: 'I am a passionate developer who loves hiking and reading sci-fi novels. Looking for meaningful connections.',
       answers: {
-        'What is your favorite book?': 'The Hitchhiker\'s Guide to the Galaxy',
-        'Tell me about your dream vacation': 'I would love to visit New Zealand and hike through the mountains while exploring LOTR filming locations.'
+        'q1': 'The Hitchhiker\'s Guide to the Galaxy',
+        'q2': 'I would love to visit New Zealand and hike through the mountains while exploring LOTR filming locations.'
       },
-      social_links: {
-        linkedin: 'https://linkedin.com/in/testapplicant'
-      }
+      submitted_links: [
+        {
+          type: 'linkedin',
+          url: 'https://linkedin.com/in/testapplicant',
+          handle: 'testapplicant'
+        }
+      ]
     };
 
-    const response = await api.post('/api/applications', applicationData);
+    const response = await api.post(`/api/applications/${testDocSlug}/apply`, applicationData);
     
     if (response.status === 201 && response.data.application) {
       testApplicationId = response.data.application.id;
@@ -196,6 +203,9 @@ async function testSubmitApplication() {
     return false;
   } catch (error) {
     log.error(`Submit application error: ${error.response?.data?.message || error.message}`);
+    if (error.response?.data?.error) {
+      log.error(`  Error details: ${error.response.data.error}`);
+    }
     return false;
   }
 }
@@ -208,7 +218,7 @@ async function testGetApplications() {
       return false;
     }
 
-    const response = await api.get(`/api/applications?date_me_doc_id=${testDocId}`);
+    const response = await api.get(`/api/docs/${testDocId}/applications`);
     
     if (response.status === 200 && response.data.applications) {
       log.success(`Retrieved ${response.data.applications.length} application(s)`);
@@ -251,30 +261,25 @@ async function testContentExtraction() {
 async function testAnalysisJob() {
   log.info('\n=== Testing Analysis Job Creation ===');
   try {
-    if (!testDocId) {
-      log.warn('No test doc ID available, skipping test');
-      return false;
-    }
-
     const analysisData = {
-      doc_id: testDocId,
-      content_sources: [
-        {
-          type: 'website',
-          url: 'https://example.com'
+      profile: {
+        bio: 'I am a software developer who loves hiking, reading science fiction, and working on AI projects. I value honesty, creativity, and continuous learning.',
+        interests: ['coding', 'hiking', 'reading', 'AI', 'technology'],
+        content: {
+          texts: ['Passionate about technology and outdoor activities.']
         }
-      ]
+      }
     };
 
-    const response = await api.post('/api/users/analyze', analysisData);
+    const response = await api.post('/api/users/analyze-profile', analysisData);
     
-    if (response.status === 200) {
-      log.success('Analysis job created successfully');
-      log.info(`  Job ID: ${response.data.jobId || 'N/A'}`);
+    if (response.status === 200 && response.data.analysis) {
+      log.success('Analysis completed successfully');
+      log.info(`  Interests found: ${response.data.analysis.interests?.length || 0}`);
       return true;
     }
     
-    log.error('Failed to create analysis job');
+    log.error('Failed to run analysis');
     return false;
   } catch (error) {
     log.error(`Analysis job error: ${error.response?.data?.message || error.message}`);
