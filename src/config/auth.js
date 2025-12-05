@@ -46,7 +46,7 @@ export const getUserProfile = async (req, res, next) => {
     const { data: profile, error } = await supabaseAdmin
       .from('user_profiles')
       .select('*')
-      .eq('user_id', req.user.id)
+      .eq('auth_user_id', req.user.id)
       .single();
 
     if (!error && profile) {
