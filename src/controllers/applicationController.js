@@ -4,10 +4,10 @@ import psychologicalAnalyzer from "../services/psychologicalAnalyzer.js";
 import matchingService from "../services/matchingService.js";
 import { v4 as uuidv4 } from "uuid";
 
-	/**
-   * Helper function
-	 * Purpose: Add applicant to product waitlist
-	 */
+/**
+ * Helper function
+ * Purpose: Add applicant to product waitlist
+ */
 async function addToWaitlist(
 	applicant_name,
 	applicant_email,
@@ -676,7 +676,7 @@ class ApplicationController {
 
 			// Get user's profile for matching
 			const { data: userProfile } = await supabaseAdmin
-				.from("profiles")
+				.from("user_profiles")
 				.select("*")
 				.eq("id", userId)
 				.single();
