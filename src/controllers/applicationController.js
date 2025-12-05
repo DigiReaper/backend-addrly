@@ -49,6 +49,57 @@ async function addToWaitlist(
 
 class ApplicationController {
 	/**
+	 * adding to waitlist
+	 */
+	async addApplicantToWaitlist(req, res) {
+		const { applicant_name, applicant_email, applicant_id } = req.body;
+		if (!applicant_name || !applicant_email) {
+			return res.status(401).json({ error: "Name or email missing" });
+		}
+		const result = await addToWaitlist(
+			applicant_name,
+			applicant_email,
+			applicant_id
+		);
+		if (!result) {
+			return res.status(500).json("Failed to add to waitlist");
+		}
+		return res.status(200).json({
+			success: true,
+			message: "Added to waitlist",
+			data: result,
+		});
+	}
+
+	/**
+	 * Get all waitlist entries
+	 */
+	async getAllWaitlistEntries(req, res) {
+		try {
+			const { data, error } = await supabaseAdmin
+				.from("product_waitlist")
+				.select("name, email, created_at, status")
+				.order("created_at", { ascending: false });
+
+			if (error) throw error;
+
+			res.status(200).json({
+				success: true,
+				message: "Waitlist entries retrieved successfully",
+				data: data,
+				count: data.length,
+			});
+		} catch (error) {
+			console.error("Get waitlist error:", error);
+			res.status(500).json({
+				success: false,
+				message: "Failed to retrieve waitlist entries",
+				error: error.message,
+			});
+		}
+	}
+
+	/**
 	 * Submit application to a date-me-doc
 	 */
 	async submit(req, res) {
